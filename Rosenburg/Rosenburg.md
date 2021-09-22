@@ -27,6 +27,7 @@ This required padding causes some information to be leaked if the error messages
 ### Attack
 How can we use this to leak information? Well think back to how block ciphers decrypt data.
 ![CBC Mode Graph](images/Cbc_decryption.png)
+
 The plaintext of the last block is directly controlled by the ciphertext of the previous block. If you're more mathematically inclined you can think of it like this.
 ```c
 Cn //Last block of ciphertext

@@ -148,7 +148,7 @@ Key: c03713f2e5d39653322d3259202ed45d
 
 Admin creds have been leaked. Now let's login as admin and try running c2_cmd. We'll have to also pass the admin's key into the c2_cmd api. Nothing is happening so there must be one more missing piece. At this point lets look around the area in the binary where the c2_cmd endpoint was found. It's possible that nearby strings will tell us the syntax. This time instead of grep we'll open the binary in a hex editor.
 
-![Screenshot of HxD with c2_cmd searched](images/screen1.png)
+![Screenshot of HxD with c2_cmd searched](images/screen1.PNG)
 
 Nearby we can see the strings `ls -la` and `cmd`, so let's try adding `'cmd':'ls -la'` to our request. 
 

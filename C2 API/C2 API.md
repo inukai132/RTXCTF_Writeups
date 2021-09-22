@@ -1,7 +1,9 @@
 ﻿# C2 API - Misc 500
 
 >pnill: Did you ever run the old c2 bot?
+>
 >kyle: yes and it told me not to run untrusted code, whatever mom
+>
 >pnill: it was supposed to execute shutdown -t 0 after saying that..
 
 ## Challenge Description

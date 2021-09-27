@@ -1,0 +1,175 @@
+﻿<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>writeup</title>
+  <link rel="stylesheet" href="https://stackedit.io/style.css" />
+</head>
+
+<body class="stackedit">
+  <div class="stackedit__html"><h1 id="floppy-image---forensics-600">Floppy Image - Forensics 600</h1>
+<blockquote>
+<p>Did someone say encryption? - Casseus</p>
+</blockquote>
+<h2 id="challenge-description">Challenge Description</h2>
+<p><strong>NOTE:</strong>  This is an  <em>difficult</em>  challenge from another CTF where there is no write-up available, it does involve forensics but it’s really here to present a challenge to a team that’s not finding a lot of other things very challenging. We recommend you do something else first ;)</p>
+<p>Good luck, and have fun.</p>
+<p>We are given <code>files12_1.zip</code></p>
+<h2 id="initial-observations">Initial Observations</h2>
+<p>The zip file contains <code>Challenge.data</code> which, according to <code>file</code>, is an SMTP mail message. <code>binwalk</code> says there is a uuencoded file named <code>exam.img</code>. We can open the file in Thunderbird to see the message.</p>
+<pre><code>To: "bill@bfiplx.com" &lt;bill@bfiplx.com&gt;
+From: &lt;ken@trendmicro.com&gt; 
+Subject: Call three sisters name in proper order at the right world.
+Good day, Bill,
+
+This is what I told you before.
+I'm not sure what data is in this, but this really scramble your brain.
+What you are seeing is not what you are thinking.
+Have a fun !
+daaah !!
+
+Cheers,
+Ken
+
+
+begin 700 exam.img
+MZSR05D%,2UE2244  @$!  +@ $ +\ D $@ "               I     %=9
+M4D0@(" @(" @1D%4,3(@("#ZC,B.T([ CM@SP+SP_XOL^[0 L@#-$W,!]+@!
+...
+M%J*U"11Y!B&amp;]N;-FSJC+)HM':SY$8MO-H2%'K\O]JQ3F1S,.&lt;1SUKF&lt;4,[P$
+M\_EF:[._,Z\7VG&lt;]=R-T-&lt;\O'$/IV!9%0T.#FD9[/D"B^&lt;O-ZR#.#0H]_XVD
+ 
+end
+
+
+
+
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+Thence come maidens much knowing three from the hall which under
+that tree stands;Urd hight the one,the second Verdandi,on a 
+tablet they graved,Skuld the third;Laws they established,life 
+allottedto the sons of men,destinies pronounced.
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+</code></pre>
+<p>Uuencoding is the process of encoding a binary file using only plain-text characters, it was mainly used to send binary data over email back in the day. It’s recognizable by the <code>begin</code> and <code>end</code> tags as well as the lines all beginning with M. We can run uudecode on the email to pull out <code>exam.img</code> a drive image file that is 1.44 MB big.</p>
+<h2 id="looking-deeper">Looking Deeper</h2>
+<p>Since this is forensics, we should investigate the headers sent in the email, there might be clues there.</p>
+<pre><code>Delivered-To: bill@bfiplx.com
+Received: by 10.176.91.92 with SMTP id c2NhbmRpc2sgYToK;
+        Fri, 5 May 2017 20:05:47 -0700 (PDT)
+Return-Path: &lt;ken@trendmicro.com&gt;
+Received: from mx.trendctf.net (mx2.trendctf.net [16.32.64.3])
+        by mx.foobiz.com with ESMTP id ODA4NiBjaGVjawo.353.2017.05.05.20.05.46
+        for bfiplx.com &lt;exam.dat&gt; text;
+        Fri, 05 May 2017 20:05:47 -0700 (PDT)
+Received: from [IPv6:::ffff:192.168.11.3] by mx.trendctf.net (Postfix) 
+        with ESMTPA id YmZpcGx4LmNvbSA8IGV4YW0uZGF0Cg 
+        for &lt;bill@bfiplx.com&gt;; Sat,6 May 2017 12:05:46 +0900 (JST)
+MIME-Version: 1.0
+To: "bill@bfiplx.com" &lt;bill@bfiplx.com&gt;
+From: &lt;ken@trendmicro.com&gt;  =?ISO-8859-1?B?TE5LNDA2MCAvS05PV0VBUwo=?=
+Subject: =?ISO-8859-1?B?Q2FsbCB0aHJlZSBzaXN0ZXJzIG5hbWUgaW4gcHJvcGVyCg==?=
+  =?ISO-8859-1?B?IG9yZGVyIGF0IHRoZSByaWdodCB3b3JsZC4K?=
+Date: Sat, 6 May 2017 12:05:39 +0900
+Importance: normal
+Content-Type: text/plain;charset="iso-8859-1"
+Message-Id: &lt;MiBoaWRkZW4gZmlsZXMK@mx.trendctf.net&gt;
+</code></pre>
+<p>Looks like some base64 data, let’s see what it says.</p>
+<p><code>c2NhbmRpc2sgYToK</code> =&gt; <code>scandisk a:</code><br>
+<code>ODA4NiBjaGVjawo</code>  =&gt; <code>8086 check</code><br>
+<code>YmZpcGx4LmNvbSA8IGV4YW0uZGF0Cg</code> =&gt; <code>bfiplx.com &lt; exam.dat</code><br>
+<code>TE5LNDA2MCAvS05PV0VBUwo=</code> =&gt; <code>LNK4060 /KNOWEAS</code><br>
+<code>Q2FsbCB0aHJlZSBzaXN0ZXJzIG5hbWUgaW4gcHJvcGVyCg==</code> =&gt; <code>Call three sisters name in proper</code><br>
+<code>IG9yZGVyIGF0IHRoZSByaWdodCB3b3JsZC4K</code> =&gt; <code>order at the right world.</code><br>
+<code>MiBoaWRkZW4gZmlsZXMK</code> =&gt; <code>2 hidden files</code><br>
+Lots of information here, <code>scandisk a:</code> suggests that the drive image is corrupt and we should find <code>2 hidden files</code>. <code>LNK4060 /KNOWEAS</code> is a linker flag that you would pass if you built a custom DOS-stub.</p>
+<p>Mounting <code>exam.img</code> reveals <code>norns.exe</code>, a 32-bit PE.</p>
+<h2 id="reversing-32-bit">Reversing 32-bit</h2>
+<p>We can open norns.exe in IDA as a 32-bit and have a look at the main function (sub_4004013).</p>
+<p>The first thing it checks is to see if we’re on the A: drive. Then it checks if we’re running using SysWOW64. There is a different subroutine that gets called if so.</p>
+<p><code>sub_4003A16</code> - SysWOW64 “main”<br>
+<code>sub_40038A0</code> - Windows 32-bit “main”</p>
+<p>Initially we will look at the 32-bit function.</p>
+<p>There’s a bit going on here. First it makes sure we have a parameter passed in on the command line. Then it copies that parameter to a 16-byte buffer, initially set to “!This program ca”. Then it will toUpper() that buffer. Then it calculates a checksum on the buffer, byte by byte.</p>
+<p>If the checksum comes out to <code>0xD86B</code> then it will do a strange performance check (might be something to baffle a debugger) and if it passes, it will create a file <code>A:\bfiplx.com</code>. Then it will select specific 8-byte arrays from memory based on the checksum and run some kind of decryption with the key being the 16-byte buffer that was checksummed.</p>
+<p>Doing a quick google search of the constants used in the decrypt will reveal that it is using TEA, or Tiny Encryption Algorithm. Once we know that we can write our own python script to try and figure out the decryption. We can pull out the correct encrypted strings since we know what the checksum should come out to be.</p>
+<pre class=" language-python"><code class="prism  language-python"><span class="token keyword">import</span> struct
+
+keyBase <span class="token operator">=</span> <span class="token string">"!THIS PROGRAM CA"</span>
+
+encBytes <span class="token operator">=</span> <span class="token punctuation">[</span> <span class="token punctuation">[</span><span class="token number">0x1C</span><span class="token punctuation">,</span><span class="token number">0x99</span><span class="token punctuation">,</span><span class="token number">0x9B</span><span class="token punctuation">,</span><span class="token number">0xF4</span><span class="token punctuation">,</span><span class="token number">0xB1</span><span class="token punctuation">,</span><span class="token number">0xE8</span><span class="token punctuation">,</span><span class="token number">0x7E</span><span class="token punctuation">,</span><span class="token number">0xB7</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+<span class="token punctuation">[</span><span class="token number">0x0E</span><span class="token punctuation">,</span><span class="token number">0x54</span><span class="token punctuation">,</span><span class="token number">0x51</span><span class="token punctuation">,</span><span class="token number">0x35</span><span class="token punctuation">,</span><span class="token number">0x59</span><span class="token punctuation">,</span><span class="token number">0x2D</span><span class="token punctuation">,</span><span class="token number">0x58</span><span class="token punctuation">,</span><span class="token number">0x2A</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+<span class="token punctuation">[</span><span class="token number">0xC2</span><span class="token punctuation">,</span><span class="token number">0x8B</span><span class="token punctuation">,</span><span class="token number">0x90</span><span class="token punctuation">,</span><span class="token number">0x9C</span><span class="token punctuation">,</span><span class="token number">0xF9</span><span class="token punctuation">,</span><span class="token number">0xE9</span><span class="token punctuation">,</span><span class="token number">0x1F</span><span class="token punctuation">,</span><span class="token number">0x80</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+<span class="token punctuation">[</span><span class="token number">0x67</span><span class="token punctuation">,</span><span class="token number">0x21</span><span class="token punctuation">,</span><span class="token number">0x7E</span><span class="token punctuation">,</span><span class="token number">0xF8</span><span class="token punctuation">,</span><span class="token number">0xEA</span><span class="token punctuation">,</span><span class="token number">0x32</span><span class="token punctuation">,</span><span class="token number">0x55</span><span class="token punctuation">,</span><span class="token number">0xBE</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+<span class="token punctuation">[</span><span class="token number">0xCB</span><span class="token punctuation">,</span><span class="token number">0x57</span><span class="token punctuation">,</span><span class="token number">0x96</span><span class="token punctuation">,</span><span class="token number">0x3B</span><span class="token punctuation">,</span><span class="token number">0xF6</span><span class="token punctuation">,</span><span class="token number">0x6E</span><span class="token punctuation">,</span><span class="token number">0x91</span><span class="token punctuation">,</span><span class="token number">0xE4</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+<span class="token punctuation">[</span><span class="token number">0x6A</span><span class="token punctuation">,</span><span class="token number">0x4E</span><span class="token punctuation">,</span><span class="token number">0xB8</span><span class="token punctuation">,</span><span class="token number">0x8D</span><span class="token punctuation">,</span><span class="token number">0xC9</span><span class="token punctuation">,</span><span class="token number">0xBB</span><span class="token punctuation">,</span><span class="token number">0xE5</span><span class="token punctuation">,</span><span class="token number">0x3E</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+<span class="token punctuation">[</span><span class="token number">0x14</span><span class="token punctuation">,</span><span class="token number">0xE1</span><span class="token punctuation">,</span><span class="token number">0xFE</span><span class="token punctuation">,</span><span class="token number">0xFC</span><span class="token punctuation">,</span><span class="token number">0x6C</span><span class="token punctuation">,</span><span class="token number">0x7E</span><span class="token punctuation">,</span><span class="token number">0x2C</span><span class="token punctuation">,</span><span class="token number">0xB0</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+<span class="token punctuation">[</span><span class="token number">0x9A</span><span class="token punctuation">,</span><span class="token number">0xB4</span><span class="token punctuation">,</span><span class="token number">0x67</span><span class="token punctuation">,</span><span class="token number">0x66</span><span class="token punctuation">,</span><span class="token number">0x6F</span><span class="token punctuation">,</span><span class="token number">0x4A</span><span class="token punctuation">,</span><span class="token number">0xF8</span><span class="token punctuation">,</span><span class="token number">0xE3</span><span class="token punctuation">]</span>
+<span class="token punctuation">]</span>
+
+checkSum<span class="token operator">=</span><span class="token number">0xD86B</span>
+
+
+<span class="token keyword">def</span> <span class="token function">getChecksum</span><span class="token punctuation">(</span>s<span class="token punctuation">)</span><span class="token punctuation">:</span>
+  csum<span class="token operator">=</span><span class="token number">0</span>
+  <span class="token keyword">for</span> i <span class="token keyword">in</span> <span class="token builtin">range</span><span class="token punctuation">(</span><span class="token number">16</span><span class="token punctuation">)</span><span class="token punctuation">:</span>
+    csum <span class="token operator">+=</span> <span class="token builtin">ord</span><span class="token punctuation">(</span>s<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token operator">*</span><span class="token number">5</span> <span class="token operator">^</span> <span class="token number">0x5c5c</span> <span class="token operator">|</span> <span class="token builtin">ord</span><span class="token punctuation">(</span>s<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">)</span>
+    csum <span class="token operator">&amp;</span><span class="token operator">=</span> <span class="token number">0xFFFFFFFF</span>
+  csum <span class="token operator">&amp;</span><span class="token operator">=</span> <span class="token number">0xFFFF</span>
+  <span class="token keyword">return</span> csum
+
+
+<span class="token keyword">def</span> <span class="token function">decrypt</span><span class="token punctuation">(</span>testStr<span class="token punctuation">)</span><span class="token punctuation">:</span>
+  <span class="token keyword">for</span> e <span class="token keyword">in</span> encBytes<span class="token punctuation">:</span>
+    subkey <span class="token operator">=</span> <span class="token number">0xc6ef3720</span>
+    eb <span class="token operator">=</span> b<span class="token string">''</span><span class="token punctuation">.</span>join<span class="token punctuation">(</span><span class="token punctuation">[</span><span class="token builtin">bytes</span><span class="token punctuation">(</span><span class="token punctuation">[</span>a<span class="token punctuation">]</span><span class="token punctuation">)</span> <span class="token keyword">for</span> a <span class="token keyword">in</span> e<span class="token punctuation">]</span><span class="token punctuation">)</span>
+    sb <span class="token operator">=</span> testStr<span class="token punctuation">.</span>encode<span class="token punctuation">(</span><span class="token string">'ascii'</span><span class="token punctuation">)</span>
+    
+    enc0<span class="token punctuation">,</span>enc1 <span class="token operator">=</span> struct<span class="token punctuation">.</span>unpack<span class="token punctuation">(</span><span class="token string">"II"</span><span class="token punctuation">,</span>eb<span class="token punctuation">)</span>
+    key0<span class="token punctuation">,</span> key1<span class="token punctuation">,</span> key2<span class="token punctuation">,</span> key3 <span class="token operator">=</span> struct<span class="token punctuation">.</span>unpack<span class="token punctuation">(</span><span class="token string">"IIII"</span><span class="token punctuation">,</span>sb<span class="token punctuation">)</span>
+    
+    <span class="token keyword">for</span> i <span class="token keyword">in</span> <span class="token builtin">range</span><span class="token punctuation">(</span><span class="token number">32</span><span class="token punctuation">)</span><span class="token punctuation">:</span>
+      enc1 <span class="token operator">-=</span> <span class="token punctuation">(</span><span class="token punctuation">(</span>subkey <span class="token operator">+</span> enc0<span class="token punctuation">)</span> <span class="token operator">^</span> <span class="token punctuation">(</span>key2 <span class="token operator">+</span> <span class="token number">16</span><span class="token operator">*</span>enc0<span class="token punctuation">)</span> <span class="token operator">^</span> <span class="token punctuation">(</span>key3 <span class="token operator">+</span> <span class="token punctuation">(</span>enc0<span class="token operator">&gt;&gt;</span><span class="token number">5</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token operator">&amp;</span><span class="token number">0xFFFFFFFF</span>
+      enc1 <span class="token operator">&amp;</span><span class="token operator">=</span> <span class="token number">0xFFFFFFFF</span>
+      tmp <span class="token operator">=</span> subkey
+      subkey <span class="token operator">+=</span> <span class="token number">0x61c88647</span>
+      result <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token punctuation">(</span>tmp <span class="token operator">+</span> enc1<span class="token punctuation">)</span> <span class="token operator">^</span> <span class="token punctuation">(</span>key0 <span class="token operator">+</span> <span class="token number">16</span><span class="token operator">*</span>enc1<span class="token punctuation">)</span> <span class="token operator">^</span> <span class="token punctuation">(</span>key1 <span class="token operator">+</span> <span class="token punctuation">(</span>enc1<span class="token operator">&gt;&gt;</span><span class="token number">5</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token operator">&amp;</span><span class="token number">0xFFFFFFFF</span>
+      enc0 <span class="token operator">-=</span> result
+      enc0 <span class="token operator">&amp;</span><span class="token operator">=</span> <span class="token number">0xFFFFFFFF</span>
+    out<span class="token punctuation">.</span>append<span class="token punctuation">(</span>struct<span class="token punctuation">.</span>pack<span class="token punctuation">(</span><span class="token string">"II"</span><span class="token punctuation">,</span>enc0<span class="token punctuation">,</span>enc1<span class="token punctuation">)</span><span class="token punctuation">)</span>
+  <span class="token keyword">return</span> b<span class="token string">''</span><span class="token punctuation">.</span>join<span class="token punctuation">(</span>out<span class="token punctuation">)</span>
+
+key <span class="token operator">=</span> <span class="token string">"TESTKEY"</span>
+
+key <span class="token operator">=</span> key<span class="token operator">+</span>keyBase<span class="token punctuation">[</span><span class="token builtin">len</span><span class="token punctuation">(</span>key<span class="token punctuation">)</span><span class="token punctuation">:</span><span class="token punctuation">]</span>
+
+<span class="token keyword">if</span> getChecksum<span class="token punctuation">(</span>key<span class="token punctuation">)</span> <span class="token operator">==</span> checkSum<span class="token punctuation">:</span>
+  <span class="token keyword">print</span><span class="token punctuation">(</span>decrypt<span class="token punctuation">(</span>key<span class="token punctuation">)</span><span class="token punctuation">)</span>
+
+</code></pre>
+<p>We can now look at the SysWOW32 function and we can see that it begins much the same way, copy argv[1] to a 16-byte buffer with “!This program ca” and toupper() it. Then it loads some functions from <code>ntdll.dll</code> and does a strange JUMPOUT.</p>
+<h2 id="heavens-gate">Heaven’s Gate</h2>
+<p>If we look at the disassembly we can see something strange happens. the fs register is stored on the stack, then <code>0x2b</code> is moved into it. Then esp is saved to the stack and rounded off. Finally <code>0x33</code> is pushed and we get a call to <code>$+5</code> which leads to a <code>retf</code>.</p>
+<p>What’s happening here is a technique called Heaven’s Gate. It allows a program to change it’s architecture during runtime. This way a 32-bit process running on a 64-bit copy of Windows can run 64-bit code and make 64-bit system calls. It’s commonly used in malware to disguise execution paths or obfuscate code.</p>
+<h2 id="reversing-64-bit">Reversing 64-bit</h2>
+<p>To properly reverse the Heaven’s Gate code we can open the binary in IDA64 and add the 64-bit code as a 64-bit segment. Once we’re in the segment we can see that it seems to be doing the same thing as the 32-bit code, but with different data and no checksums.</p>
+<h2 id="reversing-16-bit">Reversing 16-bit</h2>
+<p>The mention of “3 maidens” and “3 worlds” means there must be another head to this binary. The <code>LNK4060 /KNOWEAS</code> clue makes it obvious that there is code in the DOS Stub. By opening the binary is 16-bit mode in IDA we can get to the stub code.</p>
+<p>We can walk through the main function (sub_10018C) and see that it’s doing the same thing as the other versions. First it checks it’s on the A drive, then does the checksum on the argv[1] data. The checksum should be equal to <code>0xD923</code>.</p>
+<h2 id="putting-it-together">Putting it Together</h2>
+<p>We have 1 program that operates in 3 modes and needs 3 passwords. The original email said to “Call three sisters name in proper order at the right world.” Maybe their name’s are the passwords with <code>Urd</code> being the 16-bit one, <code>Verdandi</code> being the 32-bit one, and <code>Skuld</code> being the 64-bit one. We know that the output is a <code>.com</code> file, which is a very basic executable. There is no file structure, it’s just raw machine code that DOS loads into memory. There is a good way to identify DOS code, since so much interaction happened with interrupts we can look for <code>INT 0x21</code> instructions which compile down to <code>CD 21</code>.</p>
+<p>We can use DOSBOX to run the 16-bit code, and VMs to run the other code. We will also have to patch out the performance check to get the programs to properly run. Once we pass <code>Urd</code> we get out <code>Ok (1/3)</code> and <code>bfiplx.COM</code> is created. Once we do this for the 32 and 64 bit versions we will have 3 com files that need to be concatenated to one executable.</p>
+<p>We know from the hints that we need to run bfiplx with the following syntax <code>bfiplx.com &lt; exam.dat</code>. Now we just need <code>exam.dat</code></p>
+<h2 id="looking-for-the-final-piece">Looking for the Final Piece</h2>
+<p>There’s a helpful Linux utility called <code>testdisk</code> we can use to recover files from drive images. We can open the exam.img file and use the “Advanced” tool to analyze it for corrupt files, and then “List” to show any files it found. We’ll find <code>_XAM.DAT</code>, which looks like a deleted file. Testdisk can recover the file.</p>
+<h2 id="final-piece">Final Piece</h2>
+<p>Now we just run the com file with the _xam.dat file to get the flag. <code>TMCTF{Atropos}</code></p>
+</div>
+</body>
+
+</html>

